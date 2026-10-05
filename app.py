@@ -17,13 +17,23 @@ menu = st.sidebar.radio("Navigation", ["1. Upload & EDA", "2. Model Training", "
 st.sidebar.markdown("---")
 st.sidebar.write("Developed by: ML Student")
 
+# Sidebar File Upload
+uploaded_file = st.sidebar.file_uploader("Upload your own CSV dataset", type=["csv"])
+
 # Helper to load data
-def load_data():
-    if os.path.exists("dataset.csv"):
+def load_data(uploaded):
+    if uploaded is not None:
+        return pd.read_csv(uploaded)
+    elif os.path.exists("dataset.csv"):
         return pd.read_csv("dataset.csv")
     return None
 
-df = load_data()
+df = load_data(uploaded_file)
+
+if df is not None:
+    target_column = st.sidebar.selectbox("Select Target Column", df.columns, index=len(df.columns)-1)
+else:
+    target_column = None
 
 if menu == "1. Upload & EDA":
     st.title("Data Upload & Exploratory Data Analysis")
@@ -56,8 +66,8 @@ elif menu == "2. Model Training":
     if df is not None:
         st.write("In this section, we will train a baseline Random Forest model on the clean dataset.")
         
-        X = df.drop(columns=['target'])
-        y = df['target']
+        X = df.drop(columns=[target_column])
+        y = df[target_column]
         
         test_size = st.slider("Test Size Percentage", 10, 40, 20)
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size/100, random_state=42)
@@ -87,8 +97,8 @@ elif menu == "3. Poisoning Analysis":
         poison_ratio = st.slider("Select Poisoning Ratio (%)", 5, 30, 15) / 100
         
         if st.button("Run Poisoning Experiment"):
-            X = df.drop(columns=['target'])
-            y = df['target']
+            X = df.drop(columns=[target_column])
+            y = df[target_column]
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
             
             # 1. Clean Baseline
@@ -108,7 +118,11 @@ elif menu == "3. Poisoning Analysis":
             
             for i in poison_idx:
                 # Random label flip
-                y_train_pois[i] = (y_train_pois[i] + 1) % 3
+                unique_classes = np.unique(y_train)
+                current_class = y_train_pois[i]
+                other_classes = unique_classes[unique_classes != current_class]
+                if len(other_classes) > 0:
+                    y_train_pois[i] = np.random.choice(other_classes)
                 
             pois_model = RandomForestClassifier(random_state=42)
             pois_model.fit(X_train_pois, y_train_pois)
